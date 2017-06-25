@@ -97,6 +97,9 @@ def print_id_dataset_table(id_dataset):
 
 
 def test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder, embeddings, id_dataset, test_folder):
+    if test_folder is None:
+        return
+
     image_names = os.listdir(os.path.expanduser(test_folder))
     image_paths = [os.path.join(test_folder, img) for img in image_names]
     nrof_images = len(image_names)
@@ -168,7 +171,7 @@ def parse_arguments(argv):
 
     parser.add_argument('model', type=str, help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
     parser.add_argument('id_folder', type=str, nargs='+', help='Folder containing ID folders')
-    parser.add_argument('--test_folder', type=str, help='Folder containing test images.', default='')
+    parser.add_argument('--test_folder', type=str, help='Folder containing test images.', default=None)
     return parser.parse_args(argv)
 
 if __name__ == '__main__':
