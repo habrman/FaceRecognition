@@ -108,7 +108,7 @@ def test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder
 
     for i in range(nrof_images):
         image = misc.imread(image_paths[i])
-        face_patches, _ = detect_and_align.align_image(image, pnet, rnet, onet)
+        face_patches, _, _ = detect_and_align.align_image(image, pnet, rnet, onet)
         aligned_images = aligned_images + face_patches
         aligned_image_paths = aligned_image_paths + [image_paths[i]] * len(face_patches)
 
@@ -132,7 +132,6 @@ def main(args):
 
             pnet, rnet, onet = detect_and_align.create_mtcnn(sess, None)
 
-            # Load the model
             load_model(args.model)
             images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
             embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
@@ -145,10 +144,13 @@ def main(args):
 
             cap = cv2.VideoCapture(0)
 
+            show_landmarks = False
+            show_bb = False
+            show_id = True
             while(True):
                 _, frame = cap.read()
 
-                face_patches, padded_bounding_boxes = detect_and_align.align_image(frame, pnet, rnet, onet)
+                face_patches, padded_bounding_boxes, landmarks = detect_and_align.align_image(frame, pnet, rnet, onet)
 
                 if len(face_patches) > 0:
                     face_patches = np.stack(face_patches)
@@ -158,18 +160,47 @@ def main(args):
                     print('Matches in frame:')
                     for i in range(len(embs)):
                         bb = padded_bounding_boxes[i]
-                        cv2.rectangle(frame, (bb[0], bb[1]), (bb[2], bb[3]), (255, 0, 0), 2)
+
                         matching_id, dist = find_matching_id(id_dataset, embs[i, :])
                         if matching_id:
                             print('Hi %s! Distance: %1.4f' % (matching_id, dist))
                         else:
+                            matching_id = 'Unkown'
                             print('Unkown! Couldn\'t fint match.')
+
+                        if show_id:
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            cv2.putText(frame, matching_id, (bb[0], bb[3]), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+                        if show_bb:
+                            cv2.rectangle(frame, (bb[0], bb[1]), (bb[2], bb[3]), (255, 0, 0), 2)
+
+                        if show_landmarks:
+                            for j in range(5):
+                                size = 1
+                                top_left = (int(landmarks[i, j]) - size, int(landmarks[i, j + 5]) - size)
+                                bottom_right = (int(landmarks[i, j]) + size, int(landmarks[i, j + 5]) + size)
+                                cv2.rectangle(frame, top_left, bottom_right, (255, 0, 255), 2)
                 else:
                     print('Couldn\'t find a face')
 
                 cv2.imshow('frame', frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+
+                key = cv2.waitKey(1)
+                if key == ord('q'):
                     break
+                elif key == ord('l'):
+                    show_landmarks = True
+                elif key == ord('k'):
+                    show_landmarks = False
+                elif key == ord('b'):
+                    show_bb = True
+                elif key == ord('v'):
+                    show_bb = False
+                elif key == ord('i'):
+                    show_id = True
+                elif key == ord('u'):
+                    show_id = False
 
             cap.release()
             cv2.destroyAllWindows()

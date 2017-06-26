@@ -24,7 +24,6 @@ def get_id_data(id_folder, pnet, rnet, onet, sess, embeddings, images_placeholde
 
     aligned_images = align_id_dataset(id_dataset, pnet, rnet, onet)
 
-    # Run forward pass to calculate embeddings
     feed_dict = {images_placeholder: aligned_images, phase_train_placeholder: False}
     emb = sess.run(embeddings, feed_dict=feed_dict)
 
@@ -39,7 +38,7 @@ def align_id_dataset(id_dataset, pnet, rnet, onet):
 
     for i in range(nrof_samples):
         image = misc.imread(os.path.expanduser(id_dataset[i].image_path))
-        face_patches, _ = detect_and_align.align_image(image, pnet, rnet, onet)
+        face_patches, _, _ = detect_and_align.align_image(image, pnet, rnet, onet)
         aligned_images = aligned_images + face_patches
 
     aligned_images = np.stack(aligned_images)

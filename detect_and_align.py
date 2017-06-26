@@ -11,26 +11,28 @@ def align_image(img, pnet, rnet, onet):
     image_size = 160
 
     img_size = np.asarray(img.shape)[0:2]
-    bounding_boxes, _ = detect_face(img, pnet, rnet, onet)
-
+    bounding_boxes, landmarks = detect_face(img, pnet, rnet, onet)
     nrof_bb = bounding_boxes.shape[0]
     padded_bounding_boxes = [None] * nrof_bb
     face_patches = [None] * nrof_bb
 
-    for i in range(nrof_bb):
-        det = np.squeeze(bounding_boxes[i, 0:4])
-        bb = np.zeros(4, dtype=np.int32)
-        bb[0] = np.maximum(det[0]-margin/2, 0)
-        bb[1] = np.maximum(det[1]-margin/2, 0)
-        bb[2] = np.minimum(det[2]+margin/2, img_size[1])
-        bb[3] = np.minimum(det[3]+margin/2, img_size[0])
-        cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
-        aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
-        prewhitened = prewhiten(aligned)
-        padded_bounding_boxes[i] = bb
-        face_patches[i] = prewhitened
+    if nrof_bb > 0:
+        landmarks = np.stack(landmarks)
+        landmarks = np.transpose(landmarks, (1, 0))
+        for i in range(nrof_bb):
+            det = np.squeeze(bounding_boxes[i, 0:4])
+            bb = np.zeros(4, dtype=np.int32)
+            bb[0] = np.maximum(det[0]-margin/2, 0)
+            bb[1] = np.maximum(det[1]-margin/2, 0)
+            bb[2] = np.minimum(det[2]+margin/2, img_size[1])
+            bb[3] = np.minimum(det[3]+margin/2, img_size[0])
+            cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
+            aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
+            prewhitened = prewhiten(aligned)
+            padded_bounding_boxes[i] = bb
+            face_patches[i] = prewhitened
 
-    return face_patches, padded_bounding_boxes
+    return face_patches, padded_bounding_boxes, landmarks
 
 
 def prewhiten(x):
