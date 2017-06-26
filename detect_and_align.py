@@ -13,8 +13,12 @@ def align_image(img, pnet, rnet, onet):
     img_size = np.asarray(img.shape)[0:2]
     bounding_boxes, _ = detect_face(img, pnet, rnet, onet)
 
-    if bounding_boxes.size != 0:
-        det = np.squeeze(bounding_boxes[0, 0:4])
+    nrof_bb = bounding_boxes.shape[0]
+    padded_bounding_boxes = [None] * nrof_bb
+    face_patches = [None] * nrof_bb
+
+    for i in range(nrof_bb):
+        det = np.squeeze(bounding_boxes[i, 0:4])
         bb = np.zeros(4, dtype=np.int32)
         bb[0] = np.maximum(det[0]-margin/2, 0)
         bb[1] = np.maximum(det[1]-margin/2, 0)
@@ -23,10 +27,10 @@ def align_image(img, pnet, rnet, onet):
         cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
         aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
         prewhitened = prewhiten(aligned)
-    else:
-        prewhitened = None
+        padded_bounding_boxes[i] = bb
+        face_patches[i] = prewhitened
 
-    return prewhitened
+    return face_patches, padded_bounding_boxes
 
 
 def prewhiten(x):

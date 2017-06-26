@@ -103,23 +103,27 @@ def test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder
     image_names = os.listdir(os.path.expanduser(test_folder))
     image_paths = [os.path.join(test_folder, img) for img in image_names]
     nrof_images = len(image_names)
-    aligned_images = [None] * nrof_images
+    aligned_images = []
+    aligned_image_paths = []
 
     for i in range(nrof_images):
         image = misc.imread(image_paths[i])
-        aligned_images[i] = detect_and_align.align_image(image, pnet, rnet, onet)
+        face_patches, _ = detect_and_align.align_image(image, pnet, rnet, onet)
+        aligned_images = aligned_images + face_patches
+        aligned_image_paths = aligned_image_paths + [image_paths[i]] * len(face_patches)
 
     aligned_images = np.stack(aligned_images)
 
     feed_dict = {images_placeholder: aligned_images, phase_train_placeholder: False}
-    embeddings = sess.run(embeddings, feed_dict=feed_dict)
+    embs = sess.run(embeddings, feed_dict=feed_dict)
 
-    for i in range(len(embeddings)):
-        matching_id, dist = find_matching_id(id_dataset, embeddings[i, :])
+    for i in range(len(embs)):
+        misc.imsave('outfile'+str(i)+'.jpg', aligned_images[i])
+        matching_id, dist = find_matching_id(id_dataset, embs[i, :])
         if matching_id:
-            print('Found match %s for %s! Distance: %1.4f' % (matching_id, image_paths[i], dist))
+            print('Found match %s for %s! Distance: %1.4f' % (matching_id, aligned_image_paths[i], dist))
         else:
-            print('Couldn\'t fint match for %s' % (image_paths[i]))
+            print('Couldn\'t fint match for %s' % (aligned_image_paths[i]))
 
 
 def main(args):
@@ -143,18 +147,23 @@ def main(args):
 
             while(True):
                 _, frame = cap.read()
-                face_image = detect_and_align.align_image(frame, pnet, rnet, onet)
 
-                if face_image is not None:
-                    face_image = np.expand_dims(face_image, axis=0)
-                    feed_dict = {images_placeholder: face_image, phase_train_placeholder:False}
-                    emb = sess.run(embeddings, feed_dict=feed_dict)
+                face_patches, padded_bounding_boxes = detect_and_align.align_image(frame, pnet, rnet, onet)
 
-                    matching_id, dist = find_matching_id(id_dataset, emb[0, :])
-                    if matching_id:
-                        print('Hi %s! Distance: %1.4f' % (matching_id, dist))
-                    else:
-                        print('Unkown! Couldn\'t fint match.')
+                if len(face_patches) > 0:
+                    face_patches = np.stack(face_patches)
+                    feed_dict = {images_placeholder: face_patches, phase_train_placeholder:False}
+                    embs = sess.run(embeddings, feed_dict=feed_dict)
+
+                    print('Matches in frame:')
+                    for i in range(len(embs)):
+                        bb = padded_bounding_boxes[i]
+                        cv2.rectangle(frame, (bb[0], bb[1]), (bb[2], bb[3]), (255, 0, 0), 2)
+                        matching_id, dist = find_matching_id(id_dataset, embs[i, :])
+                        if matching_id:
+                            print('Hi %s! Distance: %1.4f' % (matching_id, dist))
+                        else:
+                            print('Unkown! Couldn\'t fint match.')
                 else:
                     print('Couldn\'t find a face')
 
