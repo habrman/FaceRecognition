@@ -10,8 +10,8 @@ Get model from [facenet](https://github.com/davidsandberg/facenet) and setup you
 The id folder should contain subfolders, each containing images of one person. The subfolders should be named after the person in the folder since this name is used as output when a match is found.
 
 Visualization hotkeys:
-*    l/k - toggle facial landmarks
-*    b/v - toggle bounding box
-*    i/u - toggle id
+*    l - toggle facial landmarks
+*    b - toggle bounding box
+*    i - toggle id
 
 ![alt text](https://github.com/habrman/FaceRecognition/blob/master/example.png)

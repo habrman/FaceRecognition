@@ -190,17 +190,11 @@ def main(args):
                 if key == ord('q'):
                     break
                 elif key == ord('l'):
-                    show_landmarks = True
-                elif key == ord('k'):
-                    show_landmarks = False
+                    show_landmarks = not show_landmarks
                 elif key == ord('b'):
-                    show_bb = True
-                elif key == ord('v'):
-                    show_bb = False
+                    show_bb = not show_bb
                 elif key == ord('i'):
-                    show_id = True
-                elif key == ord('u'):
-                    show_id = False
+                    show_id = not show_id
 
             cap.release()
             cv2.destroyAllWindows()
