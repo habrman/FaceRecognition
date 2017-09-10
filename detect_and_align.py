@@ -22,10 +22,10 @@ def align_image(img, pnet, rnet, onet):
         for i in range(nrof_bb):
             det = np.squeeze(bounding_boxes[i, 0:4])
             bb = np.zeros(4, dtype=np.int32)
-            bb[0] = np.maximum(det[0]-margin/2, 0)
-            bb[1] = np.maximum(det[1]-margin/2, 0)
-            bb[2] = np.minimum(det[2]+margin/2, img_size[1])
-            bb[3] = np.minimum(det[3]+margin/2, img_size[0])
+            bb[0] = np.maximum(det[0] - margin / 2, 0)
+            bb[1] = np.maximum(det[1] - margin / 2, 0)
+            bb[2] = np.minimum(det[2] + margin / 2, img_size[1])
+            bb[3] = np.minimum(det[3] + margin / 2, img_size[0])
             cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
             aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
             prewhitened = prewhiten(aligned)
@@ -38,8 +38,8 @@ def align_image(img, pnet, rnet, onet):
 def prewhiten(x):
     mean = np.mean(x)
     std = np.std(x)
-    std_adj = np.maximum(std, 1.0/np.sqrt(x.size))
-    y = np.multiply(np.subtract(x, mean), 1/std_adj)
+    std_adj = np.maximum(std, 1.0 / np.sqrt(x.size))
+    y = np.multiply(np.subtract(x, mean), 1 / std_adj)
     return y
 
 
@@ -83,7 +83,7 @@ def nms(boxes, threshold, method):
     x2 = boxes[:, 2]
     y2 = boxes[:, 3]
     s = boxes[:, 4]
-    area = (x2-x1+1) * (y2-y1+1)
+    area = (x2 - x1 + 1) * (y2 - y1 + 1)
     I = np.argsort(s)
     pick = np.zeros_like(s, dtype=np.int16)
     counter = 0
@@ -96,8 +96,8 @@ def nms(boxes, threshold, method):
         yy1 = np.maximum(y1[i], y1[idx])
         xx2 = np.minimum(x2[i], x2[idx])
         yy2 = np.minimum(y2[i], y2[idx])
-        w = np.maximum(0.0, xx2-xx1+1)
-        h = np.maximum(0.0, yy2-yy1+1)
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
         inter = w * h
         if method is 'Min':
             o = inter / np.minimum(area[i], area[idx])
@@ -144,11 +144,11 @@ def pad(total_boxes, w, h):
     ey[tmp] = h
 
     tmp = np.where(x < 1)
-    dx.flat[tmp] = np.expand_dims(2-x[tmp], 1)
+    dx.flat[tmp] = np.expand_dims(2 - x[tmp], 1)
     x[tmp] = 1
 
     tmp = np.where(y < 1)
-    dy.flat[tmp] = np.expand_dims(2-y[tmp], 1)
+    dy.flat[tmp] = np.expand_dims(2 - y[tmp], 1)
     y[tmp] = 1
 
     return dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph
@@ -282,8 +282,11 @@ class Network(object):
         # Verify that the grouping parameter is valid
         assert c_i % group == 0
         assert c_o % group == 0
+
         # Convolution for a given input and kernel
-        convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
+        def convolve(i, k):
+            return tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
+
         with tf.variable_scope(name) as scope:
             kernel = self.make_var('weights', shape=[k_h, k_w, c_i // group, c_o])
             # This is the common-case. Convolve the input without any further complications.
@@ -335,7 +338,7 @@ class Network(object):
     @layer
     def softmax(self, target, axis, name=None):
         max_axis = tf.reduce_max(target, axis, keep_dims=True)
-        target_exp = tf.exp(target-max_axis)
+        target_exp = tf.exp(target - max_axis)
         normalize = tf.reduce_sum(target_exp, axis, keep_dims=True)
         softmax = tf.div(target_exp, normalize, name)
         return softmax
@@ -421,9 +424,15 @@ def create_mtcnn(sess, model_path):
         onet = ONet({'data': data})
         onet.load(os.path.join(model_path, 'det3.npy'), sess)
 
-    pnet_fun = lambda img : sess.run(('pnet/conv4-2/BiasAdd:0', 'pnet/prob1:0'), feed_dict={'pnet/input:0':img})
-    rnet_fun = lambda img : sess.run(('rnet/conv5-2/conv5-2:0', 'rnet/prob1:0'), feed_dict={'rnet/input:0':img})
-    onet_fun = lambda img : sess.run(('onet/conv6-2/conv6-2:0', 'onet/conv6-3/conv6-3:0', 'onet/prob1:0'), feed_dict={'onet/input:0':img})
+    def pnet_fun(img):
+        return sess.run(('pnet/conv4-2/BiasAdd:0', 'pnet/prob1:0'), feed_dict={'pnet/input:0': img})
+
+    def rnet_fun(img):
+        return sess.run(('rnet/conv5-2/conv5-2:0', 'rnet/prob1:0'), feed_dict={'rnet/input:0': img})
+
+    def onet_fun(img):
+        return sess.run(('onet/conv6-2/conv6-2:0', 'onet/conv6-3/conv6-3:0', 'onet/prob1:0'), feed_dict={'onet/input:0': img})
+
     return pnet_fun, rnet_fun, onet_fun
 
 
@@ -444,8 +453,8 @@ def detect_face(img, pnet, rnet, onet):
     # creat scale pyramid
     scales = []
     while minl >= 12:
-        scales += [m*np.power(factor, factor_count)]
-        minl = minl*factor
+        scales += [m * np.power(factor, factor_count)]
+        minl = minl * factor
         factor_count += 1
 
     # first stage
@@ -454,7 +463,7 @@ def detect_face(img, pnet, rnet, onet):
         hs = int(np.ceil(h * scale))
         ws = int(np.ceil(w * scale))
         im_data = imresample(img, (hs, ws))
-        im_data = (im_data-127.5)*0.0078125
+        im_data = (im_data - 127.5) * 0.0078125
         img_x = np.expand_dims(im_data, 0)
         img_y = np.transpose(img_x, (0, 2, 1, 3))
         out = pnet(img_y)
@@ -490,12 +499,12 @@ def detect_face(img, pnet, rnet, onet):
         tempimg = np.zeros((24, 24, 3, numbox))
         for k in range(0, numbox):
             tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
-            tmp[dy[k]-1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
+            tmp[dy[k] - 1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (24, 24))
             else:
                 return np.empty()
-        tempimg = (tempimg-127.5)*0.0078125
+        tempimg = (tempimg - 127.5) * 0.0078125
         tempimg1 = np.transpose(tempimg, (3, 1, 0, 2))
         out = rnet(tempimg1)
         out0 = np.transpose(out[0])
@@ -518,12 +527,12 @@ def detect_face(img, pnet, rnet, onet):
         tempimg = np.zeros((48, 48, 3, numbox))
         for k in range(0, numbox):
             tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
-            tmp[dy[k]-1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
+            tmp[dy[k] - 1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (48, 48))
             else:
                 return np.empty()
-        tempimg = (tempimg-127.5)*0.0078125
+        tempimg = (tempimg - 127.5) * 0.0078125
         tempimg1 = np.transpose(tempimg, (3, 1, 0, 2))
         out = onet(tempimg1)
         out0 = np.transpose(out[0])

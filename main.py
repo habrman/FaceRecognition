@@ -118,7 +118,7 @@ def test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder
     embs = sess.run(embeddings, feed_dict=feed_dict)
 
     for i in range(len(embs)):
-        misc.imsave('outfile'+str(i)+'.jpg', aligned_images[i])
+        misc.imsave('outfile' + str(i) + '.jpg', aligned_images[i])
         matching_id, dist = find_matching_id(id_dataset, embs[i, :])
         if matching_id:
             print('Found match %s for %s! Distance: %1.4f' % (matching_id, aligned_image_paths[i], dist))
@@ -154,7 +154,7 @@ def main(args):
 
                 if len(face_patches) > 0:
                     face_patches = np.stack(face_patches)
-                    feed_dict = {images_placeholder: face_patches, phase_train_placeholder:False}
+                    feed_dict = {images_placeholder: face_patches, phase_train_placeholder: False}
                     embs = sess.run(embeddings, feed_dict=feed_dict)
 
                     print('Matches in frame:')
@@ -170,7 +170,7 @@ def main(args):
 
                         if show_id:
                             font = cv2.FONT_HERSHEY_SIMPLEX
-                            cv2.putText(frame, matching_id, (bb[0], bb[3]), font, 1, (255,255,255), 1, cv2.LINE_AA)
+                            cv2.putText(frame, matching_id, (bb[0], bb[3]), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
                         if show_bb:
                             cv2.rectangle(frame, (bb[0], bb[1]), (bb[2], bb[3]), (255, 0, 0), 2)
