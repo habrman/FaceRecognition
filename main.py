@@ -13,6 +13,7 @@ from scipy import misc
 import re
 import cv2
 import argparse
+import time
 
 
 def find_matching_id(id_dataset, embedding):
@@ -143,11 +144,14 @@ def main(args):
             test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder, embeddings, id_dataset, args.test_folder)
 
             cap = cv2.VideoCapture(0)
+            frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
             show_landmarks = False
             show_bb = False
             show_id = True
+            show_fps = False
             while(True):
+                start = time.time()
                 _, frame = cap.read()
 
                 face_patches, padded_bounding_boxes, landmarks = detect_and_align.align_image(frame, pnet, rnet, onet)
@@ -184,6 +188,15 @@ def main(args):
                 else:
                     print('Couldn\'t find a face')
 
+                end = time.time()
+
+                seconds = end - start
+                fps = round(1 / seconds, 2)
+
+                if show_fps:
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    cv2.putText(frame, str(fps), (0, int(frame_height) - 5), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+
                 cv2.imshow('frame', frame)
 
                 key = cv2.waitKey(1)
@@ -195,6 +208,8 @@ def main(args):
                     show_bb = not show_bb
                 elif key == ord('i'):
                     show_id = not show_id
+                elif key == ord('f'):
+                    show_fps = not show_fps
 
             cap.release()
             cv2.destroyAllWindows()
