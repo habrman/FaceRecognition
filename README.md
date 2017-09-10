@@ -20,8 +20,9 @@ The id folder should contain subfolders, each containing images of one person. T
 E.g. id folder named "ids" containing subfolders "Adam" and "Eve", each containing images of the respective person. Download the [model](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) to a folder named "model" and run "python3 main.py ./model/ ./ids/" to start the program.
 
 Visualization hotkeys:
-*    l - toggle facial landmarks
-*    b - toggle bounding box
-*    i - toggle id
+*   l - toggle facial landmarks
+*   b - toggle bounding box
+*   i - toggle id
+*   f - toggle frames per second
 
 ![alt text](https://github.com/habrman/FaceRecognition/blob/master/example.png)
