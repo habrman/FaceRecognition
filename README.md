@@ -15,9 +15,19 @@ A direct link to the pretrained Inception Resnet model can be found [here](https
 
 ## How to
 Get the [model from facenet](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) and setup your id folder.
-The id folder should contain subfolders, each containing images of one person. The subfolders should be named after the person in the folder since this name is used as output when a match is found.
+The id folder should contain subfolders, each containing at least one image of one person. The subfolders should be named after the person in the folder since this name is used as output when a match is found.
 
-E.g. id folder named "ids" containing subfolders "Adam" and "Eve", each containing images of the respective person. Download the [model](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) to a folder named "model" and run "python3 main.py ./model/ ./ids/" to start the program.
+E.g. id folder named `ids` containing subfolders `Adam` and `Eve`, each containing images of the respective person.
+
+```bash
+├── ids
+│   ├── Adam
+│   │   ├── Adam0.png
+│   │   ├── Adam1.png
+│   ├── Eve
+│   │   ├── Eve0.png
+```
+Download the [model](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) to a folder named `model` and run `python3 main.py ./model/ ./ids/` to start the program.
 
 Visualization hotkeys:
 *   l - toggle facial landmarks
