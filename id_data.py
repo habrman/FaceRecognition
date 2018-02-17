@@ -33,11 +33,10 @@ def get_id_data(id_folder, pnet, rnet, onet, sess, embeddings, images_placeholde
 
 
 def align_id_dataset(id_dataset, pnet, rnet, onet):
-    nrof_samples = len(id_dataset)
     aligned_images = []
 
-    for i in range(nrof_samples):
-        image = misc.imread(os.path.expanduser(id_dataset[i].image_path))
+    for i in range(len(id_dataset)):
+        image = misc.imread(os.path.expanduser(id_dataset[i].image_path), mode='RGB')
         face_patches, _, _ = detect_and_align.align_image(image, pnet, rnet, onet)
         aligned_images = aligned_images + face_patches
 
