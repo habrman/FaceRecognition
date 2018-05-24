@@ -2,19 +2,19 @@ from six import string_types, iteritems
 from scipy import misc
 import tensorflow as tf
 import numpy as np
-import os
 import cv2
+import os
 
 
-def align_image(img, pnet, rnet, onet):
+def detect_faces(img, mtcnn):
     margin = 44
     image_size = 160
 
     img_size = np.asarray(img.shape)[0:2]
-    bounding_boxes, landmarks = detect_face(img, pnet, rnet, onet)
+    bounding_boxes, landmarks = detect_face(img, mtcnn['pnet'], mtcnn['rnet'], mtcnn['onet'])
     nrof_bb = bounding_boxes.shape[0]
-    padded_bounding_boxes = [None] * nrof_bb
-    face_patches = [None] * nrof_bb
+    padded_bounding_boxes = []
+    face_patches = []
 
     if nrof_bb > 0:
         landmarks = np.stack(landmarks)
@@ -29,8 +29,8 @@ def align_image(img, pnet, rnet, onet):
             cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
             aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
             prewhitened = prewhiten(aligned)
-            padded_bounding_boxes[i] = bb
-            face_patches[i] = prewhitened
+            padded_bounding_boxes.append(bb)
+            face_patches.append(prewhitened)
 
     return face_patches, padded_bounding_boxes, landmarks
 
@@ -433,7 +433,7 @@ def create_mtcnn(sess, model_path):
     def onet_fun(img):
         return sess.run(('onet/conv6-2/conv6-2:0', 'onet/conv6-3/conv6-3:0', 'onet/prob1:0'), feed_dict={'onet/input:0': img})
 
-    return pnet_fun, rnet_fun, onet_fun
+    return {'pnet': pnet_fun, 'rnet': rnet_fun, 'onet': onet_fun}
 
 
 def detect_face(img, pnet, rnet, onet):

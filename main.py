@@ -1,147 +1,110 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import tensorflow as tf
+from sklearn.metrics.pairwise import pairwise_distances
 from tensorflow.python.platform import gfile
-import numpy as np
-import sys
-import os
-import detect_and_align
-import id_data
 from scipy import misc
-import re
-import cv2
+import tensorflow as tf
+import numpy as np
+import detect_and_align
 import argparse
 import time
+import cv2
+import os
 
 
-def find_matching_id(id_dataset, embedding):
-    threshold = 1.1
-    min_dist = 10.0
-    matching_id = None
+class IdData():
+    """Keeps track of known identities and calculates id matches"""
 
-    for id_data in id_dataset:
-        dist = get_embedding_distance(id_data.embedding, embedding)
+    def __init__(self, id_folder, mtcnn, sess, embeddings, images_placeholder,
+                 phase_train_placeholder, distance_treshold):
+        print('Loading known identities: ', end='')
+        self.distance_treshold = distance_treshold
+        self.id_folder = id_folder
+        self.mtcnn = mtcnn
+        self.id_names = []
 
-        if dist < threshold and dist < min_dist:
-            min_dist = dist
-            matching_id = id_data.name
-    return matching_id, min_dist
+        image_paths = []
+        ids = os.listdir(os.path.expanduser(id_folder))
+        for id_name in ids:
+            id_dir = os.path.join(id_folder, id_name)
+            image_paths = image_paths + [os.path.join(id_dir, img) for img in os.listdir(id_dir)]
 
+        print('Found %d images in id folder' % len(image_paths))
+        aligned_images, id_image_paths = self.detect_id_faces(image_paths)
+        feed_dict = {images_placeholder: aligned_images, phase_train_placeholder: False}
+        self.embeddings = sess.run(embeddings, feed_dict=feed_dict)
 
-def get_embedding_distance(emb1, emb2):
-    dist = np.sqrt(np.sum(np.square(np.subtract(emb1, emb2))))
-    return dist
+        if len(id_image_paths) < 5:
+            self.print_distance_table(id_image_paths)
+
+    def detect_id_faces(self, image_paths):
+        aligned_images = []
+        id_image_paths = []
+        for image_path in image_paths:
+            image = misc.imread(os.path.expanduser(image_path), mode='RGB')
+            face_patches, _, _ = detect_and_align.detect_faces(image, self.mtcnn)
+            if len(face_patches) > 1:
+                print("Warning: Found multiple faces in id image: %s" % image_path +
+                      "\nMake sure to only have one face in the id images. " +
+                      "If that's the case then it's a false positive detection and" +
+                      " you can solve it by increasing the thresolds of the cascade network")
+            aligned_images = aligned_images + face_patches
+            id_image_paths += [image_path] * len(face_patches)
+            self.id_names += [image_path.split('/')[-2]] * len(face_patches)
+
+        return np.stack(aligned_images), id_image_paths
+
+    def print_distance_table(self, id_image_paths):
+        """Prints distances between id embeddings"""
+        distance_matrix = pairwise_distances(self.embeddings, self.embeddings)
+        image_names = [path.split('/')[-1] for path in id_image_paths]
+        print('Distance matrix:\n{:20}'.format(''), end='')
+        [print('{:20}'.format(name), end='') for name in image_names]
+        for path, distance_row in zip(image_names, distance_matrix):
+            print('\n{:20}'.format(path), end='')
+            for distance in distance_row:
+                print('{:20}'.format('%0.3f' % distance), end='')
+        print()
+
+    def find_matching_ids(self, embs):
+        matching_ids = []
+        matching_distances = []
+        distance_matrix = pairwise_distances(embs, self.embeddings)
+        for distance_row in distance_matrix:
+            min_index = np.argmin(distance_row)
+            if distance_row[min_index] < self.distance_treshold:
+                matching_ids.append(self.id_names[min_index])
+                matching_distances.append(distance_row[min_index])
+            else:
+                matching_ids.append(None)
+                matching_distances.append(None)
+        return matching_ids, matching_distances
 
 
 def load_model(model):
     model_exp = os.path.expanduser(model)
     if (os.path.isfile(model_exp)):
-        print('Model filename: %s' % model_exp)
+        print('Loading model filename: %s' % model_exp)
         with gfile.FastGFile(model_exp, 'rb') as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
     else:
-        print('Model directory: %s' % model_exp)
-        meta_file, ckpt_file = get_model_filenames(model_exp)
-
-        print('Metagraph file: %s' % meta_file)
-        print('Checkpoint file: %s' % ckpt_file)
-
-        saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file))
-        saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
-
-
-def get_model_filenames(model_dir):
-    files = os.listdir(model_dir)
-    meta_files = [s for s in files if s.endswith('.meta')]
-    if len(meta_files) == 0:
-        raise ValueError('No meta file found in the model directory (%s)' % model_dir)
-    elif len(meta_files) > 1:
-        raise ValueError('There should not be more than one meta file in the model directory (%s)' % model_dir)
-    meta_file = meta_files[0]
-    meta_files = [s for s in files if '.ckpt' in s]
-    max_step = -1
-    for f in files:
-        step_str = re.match(r'(^model-[\w\- ]+.ckpt-(\d+))', f)
-        if step_str is not None and len(step_str.groups()) >= 2:
-            step = int(step_str.groups()[1])
-            if step > max_step:
-                max_step = step
-                ckpt_file = step_str.groups()[0]
-    return meta_file, ckpt_file
-
-
-def print_id_dataset_table(id_dataset):
-    nrof_samples = len(id_dataset)
-
-    print('Images:')
-    for i in range(nrof_samples):
-        print('%1d: %s' % (i, id_dataset[i].image_path))
-    print('')
-
-    print('Distance matrix')
-    print('         ', end='')
-    for i in range(nrof_samples):
-        name = os.path.splitext(os.path.basename(id_dataset[i].name))[0]
-        print('     %s   ' % name, end='')
-    print('')
-    for i in range(nrof_samples):
-        name = os.path.splitext(os.path.basename(id_dataset[i].name))[0]
-        print('%s       ' % name, end='')
-        for j in range(nrof_samples):
-            dist = get_embedding_distance(id_dataset[i].embedding, id_dataset[j].embedding)
-            print('  %1.4f      ' % dist, end='')
-        print('')
-
-
-def test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder, embeddings, id_dataset, test_folder):
-    if test_folder is None:
-        return
-
-    image_names = os.listdir(os.path.expanduser(test_folder))
-    image_paths = [os.path.join(test_folder, img) for img in image_names]
-    nrof_images = len(image_names)
-    aligned_images = []
-    aligned_image_paths = []
-
-    for i in range(nrof_images):
-        image = misc.imread(image_paths[i])
-        face_patches, _, _ = detect_and_align.align_image(image, pnet, rnet, onet)
-        aligned_images = aligned_images + face_patches
-        aligned_image_paths = aligned_image_paths + [image_paths[i]] * len(face_patches)
-
-    aligned_images = np.stack(aligned_images)
-
-    feed_dict = {images_placeholder: aligned_images, phase_train_placeholder: False}
-    embs = sess.run(embeddings, feed_dict=feed_dict)
-
-    for i in range(len(embs)):
-        misc.imsave('outfile' + str(i) + '.jpg', aligned_images[i])
-        matching_id, dist = find_matching_id(id_dataset, embs[i, :])
-        if matching_id:
-            print('Found match %s for %s! Distance: %1.4f' % (matching_id, aligned_image_paths[i], dist))
-        else:
-            print('Couldn\'t fint match for %s' % (aligned_image_paths[i]))
+        raise ValueError('Specify model file, not directory!')
 
 
 def main(args):
     with tf.Graph().as_default():
         with tf.Session() as sess:
 
-            pnet, rnet, onet = detect_and_align.create_mtcnn(sess, None)
+            # Setup models
+            mtcnn = detect_and_align.create_mtcnn(sess, None)
 
             load_model(args.model)
             images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
             embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
             phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
 
-            id_dataset = id_data.get_id_data(args.id_folder[0], pnet, rnet, onet, sess, embeddings, images_placeholder, phase_train_placeholder)
-            print_id_dataset_table(id_dataset)
-
-            test_run(pnet, rnet, onet, sess, images_placeholder, phase_train_placeholder, embeddings, id_dataset, args.test_folder)
+            # Load anchor IDs
+            id_data = IdData(args.id_folder[0], mtcnn, sess, embeddings, images_placeholder, phase_train_placeholder, args.threshold)
 
             cap = cv2.VideoCapture(0)
             frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -154,7 +117,8 @@ def main(args):
                 start = time.time()
                 _, frame = cap.read()
 
-                face_patches, padded_bounding_boxes, landmarks = detect_and_align.align_image(frame, pnet, rnet, onet)
+                # Locate faces and landmarks in frame
+                face_patches, padded_bounding_boxes, landmarks = detect_and_align.detect_faces(frame, mtcnn)
 
                 if len(face_patches) > 0:
                     face_patches = np.stack(face_patches)
@@ -162,28 +126,25 @@ def main(args):
                     embs = sess.run(embeddings, feed_dict=feed_dict)
 
                     print('Matches in frame:')
-                    for i in range(len(embs)):
-                        bb = padded_bounding_boxes[i]
+                    matching_ids, matching_distances = id_data.find_matching_ids(embs)
 
-                        matching_id, dist = find_matching_id(id_dataset, embs[i, :])
-                        if matching_id:
-                            print('Hi %s! Distance: %1.4f' % (matching_id, dist))
+                    for bb, landmark, matching_id, dist in zip(padded_bounding_boxes, landmarks, matching_ids, matching_distances):
+                        if matching_id is None:
+                            matching_id = 'Unknown'
+                            print('Unknown! Couldn\'t fint match.')
                         else:
-                            matching_id = 'Unkown'
-                            print('Unkown! Couldn\'t fint match.')
+                            print('Hi %s! Distance: %1.4f' % (matching_id, dist))
 
                         if show_id:
                             font = cv2.FONT_HERSHEY_SIMPLEX
                             cv2.putText(frame, matching_id, (bb[0], bb[3]), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
-
                         if show_bb:
                             cv2.rectangle(frame, (bb[0], bb[1]), (bb[2], bb[3]), (255, 0, 0), 2)
-
                         if show_landmarks:
                             for j in range(5):
                                 size = 1
-                                top_left = (int(landmarks[i, j]) - size, int(landmarks[i, j + 5]) - size)
-                                bottom_right = (int(landmarks[i, j]) + size, int(landmarks[i, j + 5]) + size)
+                                top_left = (int(landmark[j]) - size, int(landmark[j + 5]) - size)
+                                bottom_right = (int(landmark[j]) + size, int(landmark[j + 5]) + size)
                                 cv2.rectangle(frame, top_left, bottom_right, (255, 0, 255), 2)
                 else:
                     print('Couldn\'t find a face')
@@ -215,13 +176,11 @@ def main(args):
             cv2.destroyAllWindows()
 
 
-def parse_arguments(argv):
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('model', type=str, help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
+    parser.add_argument('model', type=str, help='Path to model protobuf (.pb) file')
     parser.add_argument('id_folder', type=str, nargs='+', help='Folder containing ID folders')
-    parser.add_argument('--test_folder', type=str, help='Folder containing test images.', default=None)
-    return parser.parse_args(argv)
-
-if __name__ == '__main__':
-    main(parse_arguments(sys.argv[1:]))
+    parser.add_argument('-t', '--threshold', type=float,
+        help='Distance threshold defining an id match', default=1.2)
+    main(parser.parse_args())

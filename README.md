@@ -3,10 +3,10 @@ Webcam face recognition using tensorflow and opencv.
 The application tries to find faces in the webcam image and match them against images in an id folder using deep neural networks.
 
 ## Dependencies
-*   Pillow
 *   OpenCv
 *   Scipy
 *   Tensorflow
+*   Scikit-learn
 
 ## Inspiration
 Models, training code and inspriation can be found in the [facenet](https://github.com/davidsandberg/facenet) repository.
@@ -27,7 +27,7 @@ E.g. id folder named `ids` containing subfolders `Adam` and `Eve`, each containi
 │   ├── Eve
 │   │   ├── Eve0.png
 ```
-Download the [model](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) to a folder named `model` and run `python3 main.py ./model/ ./ids/` to start the program.
+Download and unpack the [model](https://drive.google.com/file/d/0B5MzpY9kBtDVZ2RpVDYwWmxoSUk) to a folder and run `python3 main.py ./folder/model.pb ./ids/` to start the program. Make sure to replace `./folder/model.pb` with the path to the downloaded model.
 
 Visualization hotkeys:
 *   l - toggle facial landmarks
