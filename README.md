@@ -4,7 +4,6 @@ The application tries to find faces in the webcam image and match them against i
 
 ## Dependencies
 *   OpenCv
-*   Scipy
 *   Tensorflow
 *   Scikit-learn
 
