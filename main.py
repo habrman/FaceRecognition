@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import detect_and_align
 import argparse
+import easygui
 import time
 import cv2
 import os
@@ -20,9 +21,14 @@ class IdData:
         self.id_folder = id_folder
         self.mtcnn = mtcnn
         self.id_names = []
+        self.embeddings = None
 
         image_paths = []
+        os.makedirs(id_folder, exist_ok=True)
         ids = os.listdir(os.path.expanduser(id_folder))
+        if not ids:
+            return
+
         for id_name in ids:
             id_dir = os.path.join(id_folder, id_name)
             image_paths = image_paths + [os.path.join(id_dir, img) for img in os.listdir(id_dir)]
@@ -34,6 +40,19 @@ class IdData:
 
         if len(id_image_paths) < 5:
             self.print_distance_table(id_image_paths)
+
+    def add_id(self, embedding, new_id, face_patch):
+        if self.embeddings is None:
+            self.embeddings = np.atleast_2d(embedding)
+        else:
+            self.embeddings = np.vstack([self.embeddings, embedding])
+        self.id_names.append(new_id)
+        id_folder = os.path.join(self.id_folder, new_id)
+        os.makedirs(id_folder, exist_ok=True)
+        filenames = [s.split(".")[0] for s in os.listdir(id_folder)]
+        numbered_filenames = [int(f) for f in filenames if f.isdigit()]
+        img_number = max(numbered_filenames) + 1 if numbered_filenames else 0
+        cv2.imwrite(os.path.join(id_folder, f"{img_number}.jpg"), face_patch)
 
     def detect_id_faces(self, image_paths):
         aligned_images = []
@@ -69,17 +88,21 @@ class IdData:
         print()
 
     def find_matching_ids(self, embs):
-        matching_ids = []
-        matching_distances = []
-        distance_matrix = pairwise_distances(embs, self.embeddings)
-        for distance_row in distance_matrix:
-            min_index = np.argmin(distance_row)
-            if distance_row[min_index] < self.distance_treshold:
-                matching_ids.append(self.id_names[min_index])
-                matching_distances.append(distance_row[min_index])
-            else:
-                matching_ids.append(None)
-                matching_distances.append(None)
+        if self.id_names:
+            matching_ids = []
+            matching_distances = []
+            distance_matrix = pairwise_distances(embs, self.embeddings)
+            for distance_row in distance_matrix:
+                min_index = np.argmin(distance_row)
+                if distance_row[min_index] < self.distance_treshold:
+                    matching_ids.append(self.id_names[min_index])
+                    matching_distances.append(distance_row[min_index])
+                else:
+                    matching_ids.append(None)
+                    matching_distances.append(None)
+        else:
+            matching_ids = [None] * len(embs)
+            matching_distances = [np.inf] * len(embs)
         return matching_ids, matching_distances
 
 
@@ -109,13 +132,7 @@ def main(args):
 
             # Load anchor IDs
             id_data = IdData(
-                args.id_folder[0],
-                mtcnn,
-                sess,
-                embeddings,
-                images_placeholder,
-                phase_train_placeholder,
-                args.threshold,
+                args.id_folder[0], mtcnn, sess, embeddings, images_placeholder, phase_train_placeholder, args.threshold
             )
 
             cap = cv2.VideoCapture(0)
@@ -125,6 +142,7 @@ def main(args):
             show_bb = False
             show_id = True
             show_fps = False
+            frame_detections = None
             while True:
                 start = time.time()
                 _, frame = cap.read()
@@ -137,9 +155,10 @@ def main(args):
                     feed_dict = {images_placeholder: face_patches, phase_train_placeholder: False}
                     embs = sess.run(embeddings, feed_dict=feed_dict)
 
-                    print("Matches in frame:")
                     matching_ids, matching_distances = id_data.find_matching_ids(embs)
+                    frame_detections = {"embs": embs, "bbs": padded_bounding_boxes, "frame": frame.copy()}
 
+                    print("Matches in frame:")
                     for bb, landmark, matching_id, dist in zip(
                         padded_bounding_boxes, landmarks, matching_ids, matching_distances
                     ):
@@ -185,6 +204,14 @@ def main(args):
                     show_id = not show_id
                 elif key == ord("f"):
                     show_fps = not show_fps
+                elif key == ord("s") and frame_detections is not None:
+                    for emb, bb in zip(frame_detections["embs"], frame_detections["bbs"]):
+                        patch = frame_detections["frame"][bb[1] : bb[3], bb[0] : bb[2], :]
+                        cv2.imshow("frame", patch)
+                        cv2.waitKey(1)
+                        new_id = easygui.enterbox("Who's in the image? Leave empty for non-valid")
+                        if len(new_id) > 0:
+                            id_data.add_id(emb, new_id, patch)
 
             cap.release()
             cv2.destroyAllWindows()
@@ -195,5 +222,5 @@ if __name__ == "__main__":
 
     parser.add_argument("model", type=str, help="Path to model protobuf (.pb) file")
     parser.add_argument("id_folder", type=str, nargs="+", help="Folder containing ID folders")
-    parser.add_argument("-t", "--threshold", type=float, help="Distance threshold defining an id match", default=1.2)
+    parser.add_argument("-t", "--threshold", type=float, help="Distance threshold defining an id match", default=1.0)
     main(parser.parse_args())

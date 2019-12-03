@@ -6,6 +6,7 @@ The application tries to find faces in the webcam image and match them against i
 *   OpenCv
 *   Tensorflow
 *   Scikit-learn
+*   easygui
 
 ## Inspiration
 Models, training code and inspriation can be found in the [facenet](https://github.com/davidsandberg/facenet) repository.
@@ -33,5 +34,6 @@ Visualization hotkeys:
 *   b - toggle bounding box
 *   i - toggle id
 *   f - toggle frames per second
+*   s - save image face detections to id folder
 
 ![alt text](https://github.com/habrman/FaceRecognition/blob/master/example.png)
